@@ -16,12 +16,48 @@ function saveOwned(owned) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify([...owned]))
 }
 
+function getOwnedFromUrl() {
+  const params = new URLSearchParams(window.location.search)
+  const encoded = params.get('ids')
+  if (!encoded) return null
+  try {
+    const binary = atob(encoded.replace(/-/g, '+').replace(/_/g, '/'))
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+    const ids = []
+    for (let i = 0; i < 1051; i++) {
+      if (bytes[i >> 3] & (1 << (i & 7))) ids.push(i + 1)
+    }
+    return new Set(ids)
+  } catch {
+    return null
+  }
+}
+
+function encodeOwned(owned) {
+  const bytes = new Uint8Array(132)
+  for (const id of owned) {
+    if (id >= 1 && id <= 1051) bytes[(id - 1) >> 3] |= 1 << ((id - 1) & 7)
+  }
+  let binary = ''
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_')
+}
+
 function App() {
   const [pokemon, setPokemon] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [search, setSearch] = useState('')
-  const [owned, setOwned] = useState(loadOwned)
+  const [owned, setOwned] = useState(() => {
+    const fromUrl = getOwnedFromUrl()
+    if (fromUrl) {
+      saveOwned(fromUrl)
+      return fromUrl
+    }
+    return loadOwned()
+  })
+  const [shareCopied, setShareCopied] = useState(false)
 
   const toggleOwned = useCallback((id) => {
     setOwned((prev) => {
@@ -35,6 +71,13 @@ function App() {
       return next
     })
   }, [])
+
+  const createShareLink = useCallback(async () => {
+    const link = `${window.location.origin}${window.location.pathname}?ids=${encodeOwned(owned)}`
+    await navigator.clipboard.writeText(link)
+    setShareCopied(true)
+    setTimeout(() => setShareCopied(false), 2000)
+  }, [owned])
 
   const fetchPokemon = useCallback(async () => {
     setLoading(true)
@@ -113,6 +156,9 @@ function App() {
             <span className="stats-count">{ownedCount}</span>
             <span className="stats-total">/ {pokemon.length} owned</span>
           </div>
+          <button className="share-btn" onClick={createShareLink} title="Copy shareable link">
+            {shareCopied ? '✓ Copied!' : 'Share'}
+          </button>
           <div className="search">
             <div className="search-wrapper">
               <input

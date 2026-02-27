@@ -233,3 +233,19 @@
 .retry-btn:hover {
   opacity: 0.9;
 }
+
+.share-btn {
+  padding: 0.5rem 1rem;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+
+.share-btn:hover {
+  border-color: var(--accent-red);
+  color: var(--accent-red);
+}
