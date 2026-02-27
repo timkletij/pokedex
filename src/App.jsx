@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import './App.css'
 
 const STORAGE_KEY = 'pokedex-owned'
+const POKEMON_COUNT = 1025
 
 function loadOwned() {
   try {
@@ -25,7 +26,7 @@ function getOwnedFromUrl() {
     const bytes = new Uint8Array(binary.length)
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
     const ids = []
-    for (let i = 0; i < 1051; i++) {
+    for (let i = 0; i < POKEMON_COUNT; i++) {
       if (bytes[i >> 3] & (1 << (i & 7))) ids.push(i + 1)
     }
     return new Set(ids)
@@ -35,9 +36,9 @@ function getOwnedFromUrl() {
 }
 
 function encodeOwned(owned) {
-  const bytes = new Uint8Array(132)
+  const bytes = new Uint8Array(Math.ceil(POKEMON_COUNT / 8))
   for (const id of owned) {
-    if (id >= 1 && id <= 1051) bytes[(id - 1) >> 3] |= 1 << ((id - 1) & 7)
+    if (id >= 1 && id <= POKEMON_COUNT) bytes[(id - 1) >> 3] |= 1 << ((id - 1) & 7)
   }
   let binary = ''
   for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
@@ -83,7 +84,7 @@ function App() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('https://pokeapi.co/api/v2/pokemon?limit=1051')
+      const res = await fetch(`https://pokeapi.co/api/v2/pokemon?limit=${POKEMON_COUNT}`)
       if (!res.ok) throw new Error(`API returned ${res.status}`)
       const data = await res.json()
       const results = data.results
