@@ -59,6 +59,26 @@ function App() {
     return loadOwned()
   })
   const [shareCopied, setShareCopied] = useState(false)
+  const [installPrompt, setInstallPrompt] = useState(null)
+  const [showInstallBanner, setShowInstallBanner] = useState(false)
+
+  useEffect(() => {
+    const handler = (e) => {
+      e.preventDefault()
+      setInstallPrompt(e)
+      setShowInstallBanner(true)
+    }
+    window.addEventListener('beforeinstallprompt', handler)
+    return () => window.removeEventListener('beforeinstallprompt', handler)
+  }, [])
+
+  const handleInstall = useCallback(async () => {
+    if (!installPrompt) return
+    await installPrompt.prompt()
+    const { outcome } = await installPrompt.userChoice
+    if (outcome === 'accepted') setShowInstallBanner(false)
+    setInstallPrompt(null)
+  }, [installPrompt])
 
   const toggleOwned = useCallback((id) => {
     setOwned((prev) => {
@@ -157,6 +177,11 @@ function App() {
             <span className="stats-count">{ownedCount}</span>
             <span className="stats-total">/ {pokemon.length} owned</span>
           </div>
+          {showInstallBanner && (
+            <button className="install-btn" onClick={handleInstall} title="Install app">
+              Install
+            </button>
+          )}
           <button className="share-btn" onClick={createShareLink} title="Copy shareable link">
             {shareCopied ? '✓ Copied!' : 'Share'}
           </button>

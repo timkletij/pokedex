@@ -234,6 +234,21 @@
   opacity: 0.9;
 }
 
+.install-btn {
+  padding: 0.5rem 1rem;
+  background: var(--accent-red);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: opacity 0.2s;
+}
+
+.install-btn:hover {
+  opacity: 0.9;
+}
+
 .share-btn {
   padding: 0.5rem 1rem;
   background: var(--bg-card);
