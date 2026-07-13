@@ -234,6 +234,15 @@
   opacity: 0.9;
 }
 
+.cache-badge {
+  padding: 0.4rem 0.75rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
 .install-btn {
   padding: 0.5rem 1rem;
   background: var(--accent-red);

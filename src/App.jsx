@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { loadPokemon, fetchPokemon } from './pokemonData'
 import './App.css'
 
 const STORAGE_KEY = 'pokedex-owned'
@@ -61,6 +62,7 @@ function App() {
   const [shareCopied, setShareCopied] = useState(false)
   const [installPrompt, setInstallPrompt] = useState(null)
   const [showInstallBanner, setShowInstallBanner] = useState(false)
+  const [usingCache, setUsingCache] = useState(false)
 
   useEffect(() => {
     const handler = (e) => {
@@ -100,34 +102,13 @@ function App() {
     setTimeout(() => setShareCopied(false), 2000)
   }, [owned])
 
-  const fetchPokemon = useCallback(async () => {
+  const refreshPokemon = useCallback(async () => {
     setLoading(true)
     setError(null)
+    setUsingCache(false)
     try {
-      const res = await fetch(`https://pokeapi.co/api/v2/pokemon?limit=${POKEMON_COUNT}`)
-      if (!res.ok) throw new Error(`API returned ${res.status}`)
-      const data = await res.json()
-      const results = data.results
-
-      const BATCH_SIZE = 20
-      const withDetails = []
-      for (let i = 0; i < results.length; i += BATCH_SIZE) {
-        const batch = results.slice(i, i + BATCH_SIZE)
-        const batchResults = await Promise.all(
-          batch.map(async (p) => {
-            const detailRes = await fetch(p.url)
-            const detail = await detailRes.json()
-            return {
-              id: detail.id,
-              name: detail.name,
-              sprite: detail.sprites.other['official-artwork']?.front_default ||
-                detail.sprites.front_default,
-            }
-          })
-        )
-        withDetails.push(...batchResults)
-      }
-      setPokemon(withDetails)
+      const data = await fetchPokemon()
+      setPokemon(data)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -136,8 +117,33 @@ function App() {
   }, [])
 
   useEffect(() => {
-    fetchPokemon()
-  }, [fetchPokemon])
+    let cancelled = false
+
+    loadPokemon({
+      onCached: (data, stale) => {
+        if (cancelled) return
+        setPokemon(data)
+        setLoading(false)
+        if (stale) setUsingCache(true)
+      },
+      onUpdated: (data) => {
+        if (cancelled) return
+        setPokemon(data)
+        setLoading(false)
+        setUsingCache(false)
+        setError(null)
+      },
+      onError: (message) => {
+        if (cancelled) return
+        setError(message)
+        setLoading(false)
+      },
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const filtered = search.trim()
     ? pokemon.filter((p) => {
@@ -157,7 +163,7 @@ function App() {
         <div className="error">
           <p>Failed to load Pokemon: {error}</p>
           <p>Check your connection and try again.</p>
-          <button className="retry-btn" onClick={fetchPokemon}>
+          <button className="retry-btn" onClick={refreshPokemon}>
             Retry
           </button>
         </div>
@@ -185,6 +191,11 @@ function App() {
           <button className="share-btn" onClick={createShareLink} title="Copy shareable link">
             {shareCopied ? '✓ Copied!' : 'Share'}
           </button>
+          {usingCache && (
+            <span className="cache-badge" title="Showing cached data while refreshing">
+              Cached
+            </span>
+          )}
           <div className="search">
             <div className="search-wrapper">
               <input
