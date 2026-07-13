@@ -1,6 +1,8 @@
 const CACHE_KEY = 'pokedex-pokemon-data'
 const CACHE_MAX_AGE = 7 * 24 * 60 * 60 * 1000
+const API_TIMEOUT = 10000
 const POKEMON_COUNT = 1025
+const FALLBACK_URL = '/pokemon-fallback.json'
 const SPRITE_BASE =
   'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork'
 
@@ -37,71 +39,78 @@ function parsePokemonFromList(results) {
   })
 }
 
-function parsePokemonFromDetail(detail) {
-  return {
-    id: detail.id,
-    name: detail.name,
-    sprite:
-      detail.sprites.other['official-artwork']?.front_default ||
-      detail.sprites.front_default ||
-      `${SPRITE_BASE}/${detail.id}.png`,
+async function fetchWithTimeout(url, ms = API_TIMEOUT) {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), ms)
+  try {
+    const res = await fetch(url, { signal: controller.signal })
+    if (!res.ok) throw new Error(`API returned ${res.status}`)
+    return res
+  } finally {
+    clearTimeout(timeout)
   }
 }
 
 async function fetchPokemonList() {
-  const res = await fetch(`https://pokeapi.co/api/v2/pokemon?limit=${POKEMON_COUNT}`)
-  if (!res.ok) throw new Error(`API returned ${res.status}`)
+  const res = await fetchWithTimeout(
+    `https://pokeapi.co/api/v2/pokemon?limit=${POKEMON_COUNT}`
+  )
   const data = await res.json()
   return parsePokemonFromList(data.results)
 }
 
-async function fetchPokemonWithDetails() {
-  const res = await fetch(`https://pokeapi.co/api/v2/pokemon?limit=${POKEMON_COUNT}`)
-  if (!res.ok) throw new Error(`API returned ${res.status}`)
-  const data = await res.json()
-  const results = data.results
-
-  const BATCH_SIZE = 20
-  const withDetails = []
-  for (let i = 0; i < results.length; i += BATCH_SIZE) {
-    const batch = results.slice(i, i + BATCH_SIZE)
-    const batchResults = await Promise.all(
-      batch.map(async (p) => {
-        const detailRes = await fetch(p.url)
-        if (!detailRes.ok) throw new Error(`Detail fetch failed: ${detailRes.status}`)
-        const detail = await detailRes.json()
-        return parsePokemonFromDetail(detail)
-      })
-    )
-    withDetails.push(...batchResults)
+async function fetchBundledFallback() {
+  const res = await fetch(FALLBACK_URL)
+  if (!res.ok) throw new Error('Bundled fallback unavailable')
+  const pokemon = await res.json()
+  if (!Array.isArray(pokemon) || pokemon.length === 0) {
+    throw new Error('Bundled fallback is empty')
   }
-  return withDetails
+  return pokemon
 }
 
 export async function fetchPokemon() {
   try {
-    const pokemon = await fetchPokemonWithDetails()
-    saveCachedPokemon(pokemon)
-    return pokemon
-  } catch {
     const pokemon = await fetchPokemonList()
     saveCachedPokemon(pokemon)
-    return pokemon
+    return { pokemon, source: 'api' }
+  } catch {
+    const pokemon = await fetchBundledFallback()
+    saveCachedPokemon(pokemon)
+    return { pokemon, source: 'bundled' }
   }
 }
 
 export async function loadPokemon({ onCached, onUpdated, onError }) {
   const cached = loadCachedPokemon()
+  let hasData = false
+
   if (cached) {
-    onCached(cached.pokemon, cached.stale)
+    onCached(cached.pokemon, cached.stale, false)
+    hasData = true
     if (!cached.stale) return
+  } else {
+    try {
+      const bundled = await fetchBundledFallback()
+      onCached(bundled, true, true)
+      hasData = true
+    } catch {
+      // bundled missing — fall through to network attempt
+    }
   }
 
   try {
-    const pokemon = await fetchPokemon()
-    onUpdated(pokemon)
-  } catch (err) {
-    if (cached) return
-    onError(err.message)
+    const pokemon = await fetchPokemonList()
+    saveCachedPokemon(pokemon)
+    onUpdated(pokemon, false)
+  } catch {
+    if (hasData) return
+    try {
+      const bundled = await fetchBundledFallback()
+      saveCachedPokemon(bundled)
+      onUpdated(bundled, true)
+    } catch (err) {
+      onError(err.message)
+    }
   }
 }

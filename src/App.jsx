@@ -63,6 +63,7 @@ function App() {
   const [installPrompt, setInstallPrompt] = useState(null)
   const [showInstallBanner, setShowInstallBanner] = useState(false)
   const [usingCache, setUsingCache] = useState(false)
+  const [usingFallback, setUsingFallback] = useState(false)
 
   useEffect(() => {
     const handler = (e) => {
@@ -106,9 +107,11 @@ function App() {
     setLoading(true)
     setError(null)
     setUsingCache(false)
+    setUsingFallback(false)
     try {
-      const data = await fetchPokemon()
-      setPokemon(data)
+      const { pokemon, source } = await fetchPokemon()
+      setPokemon(pokemon)
+      setUsingFallback(source === 'bundled')
     } catch (err) {
       setError(err.message)
     } finally {
@@ -120,17 +123,19 @@ function App() {
     let cancelled = false
 
     loadPokemon({
-      onCached: (data, stale) => {
+      onCached: (data, stale, fromFallback) => {
         if (cancelled) return
         setPokemon(data)
         setLoading(false)
-        if (stale) setUsingCache(true)
+        setUsingCache(stale && !fromFallback)
+        setUsingFallback(fromFallback)
       },
-      onUpdated: (data) => {
+      onUpdated: (data, fromFallback) => {
         if (cancelled) return
         setPokemon(data)
         setLoading(false)
         setUsingCache(false)
+        setUsingFallback(fromFallback)
         setError(null)
       },
       onError: (message) => {
@@ -191,7 +196,12 @@ function App() {
           <button className="share-btn" onClick={createShareLink} title="Copy shareable link">
             {shareCopied ? '✓ Copied!' : 'Share'}
           </button>
-          {usingCache && (
+          {usingFallback && (
+            <span className="cache-badge" title="PokeAPI unavailable — using bundled data">
+              Offline data
+            </span>
+          )}
+          {usingCache && !usingFallback && (
             <span className="cache-badge" title="Showing cached data while refreshing">
               Cached
             </span>

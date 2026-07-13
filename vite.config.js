@@ -9,7 +9,7 @@ export default defineConfig({
     VitePWA({
       minify: false,
       registerType: 'autoUpdate',
-      includeAssets: ['icon.svg'],
+      includeAssets: ['icon.svg', 'pokemon-fallback.json'],
       manifest: {
         name: 'Pokedex — My Collection',
         short_name: 'Pokedex',
@@ -28,7 +28,7 @@ export default defineConfig({
         ]
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,json}'],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/pokeapi\.co\/.*/i,
